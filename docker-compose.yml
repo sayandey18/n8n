@@ -113,6 +113,7 @@ services:
       N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
       N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
       N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: 15
+      NODE_OPTIONS: "--disable-warning=ExperimentalWarning"
     volumes:
       # Allow-lists which JS builtin/npm modules and Python stdlib/pip
       # packages the Code node may import. See n8n-task-runners.json and
