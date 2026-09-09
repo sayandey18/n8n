@@ -59,7 +59,7 @@ services:
       N8N_PORT: 5678
       N8N_PROTOCOL: https
       N8N_EDITOR_BASE_URL: https://${N8N_HOST}/
-      WEBHOOK_URL: https://${N8N_HOST}/
+      N8N_WEBHOOK_URL: https://${N8N_HOST}/
       N8N_PROXY_HOPS: 1
       N8N_SECURE_COOKIE: "true"
       NODE_ENV: production
@@ -78,7 +78,6 @@ services:
       # Task runners execute Code-node scripts in the separate n8n-runners
       # container instead of inside the main n8n process. This is required
       # for safe Code-node execution in production (see README).
-      N8N_RUNNERS_ENABLED: "true"        # required on n8n 1.x, harmless/ignored on 2.x+
       N8N_RUNNERS_MODE: external
       N8N_RUNNERS_BROKER_LISTEN_ADDRESS: 0.0.0.0
       N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
