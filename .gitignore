@@ -1,0 +1,64 @@
+# Environment / secrets
+
+.env
+.env.*
+!.env.example
+
+# n8n local data
+
+.n8n/
+n8n_data/
+data/
+
+# PostgreSQL data
+
+postgres_data/
+postgres_data_*/
+
+# Docker / local overrides
+
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Logs
+
+*.log
+logs/
+
+# OS files
+
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+
+*.tmp
+*.temp
+*~
+
+# Node.js
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+
+**pycache**/
+*.py[cod]
+.venv/
+venv/
+
+# Backup files
+
+*.bak
+*.backup
+*.old
