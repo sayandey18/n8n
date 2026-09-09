@@ -1,0 +1,18 @@
+{
+  "task-runners": [
+    {
+      "runner-type": "javascript",
+      "env-overrides": {
+        "NODE_FUNCTION_ALLOW_BUILTIN": "crypto,querystring,url,util",
+        "NODE_FUNCTION_ALLOW_EXTERNAL": ""
+      }
+    },
+    {
+      "runner-type": "python",
+      "env-overrides": {
+        "N8N_RUNNERS_STDLIB_ALLOW": "json,re,math,datetime,random,itertools,collections,statistics,base64,hashlib,time,uuid,decimal,csv,textwrap",
+        "N8N_RUNNERS_EXTERNAL_ALLOW": ""
+      }
+    }
+  ]
+}

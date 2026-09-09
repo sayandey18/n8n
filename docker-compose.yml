@@ -1,0 +1,170 @@
+name: n8n-stack
+
+# ---------------------------------------------------------------------------
+# Production n8n stack
+#   - postgres              persistent, production-grade database for n8n
+#   - n8n                   main n8n process (web editor, webhooks, scheduler)
+#   - n8n-runners           sidecar "task runner" that executes Code node
+#                           JavaScript AND Python in an isolated process
+#                           (required for safe Code-node execution in prod)
+#   - nginx-proxy-manager   reverse proxy / TLS termination in front of n8n
+#   - watchtower            checks for new images ~once a week and updates
+#                           the containers that opt in via label
+#
+# See README.md for setup steps, secret generation, and operational notes.
+# ---------------------------------------------------------------------------
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: n8n_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Left off Watchtower's update list on purpose: a floating Postgres major
+    # version can break the data directory on upgrade. Bump the "16-alpine"
+    # tag yourself, deliberately, after taking a backup.
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # --- database -----------------------------------------------------
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # --- public URL / reverse proxy ------------------------------------
+      N8N_HOST: ${N8N_HOST}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: https
+      N8N_EDITOR_BASE_URL: https://${N8N_HOST}/
+      WEBHOOK_URL: https://${N8N_HOST}/
+      N8N_PROXY_HOPS: 1
+      N8N_SECURE_COOKIE: "true"
+      NODE_ENV: production
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE}
+      TZ: ${GENERIC_TIMEZONE}
+
+      # --- secrets ---------------------------------------------------------
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+
+      # --- node support ----------------------------------------------------
+      # Community nodes let you install any published n8n node package
+      # in addition to all built-in node types (HTTP, triggers, AI, etc.)
+      N8N_COMMUNITY_PACKAGES_ENABLED: "true"
+
+      # --- Code node isolation (JavaScript + Python) ------------------------
+      # Task runners execute Code-node scripts in the separate n8n-runners
+      # container instead of inside the main n8n process. This is required
+      # for safe Code-node execution in production (see README).
+      N8N_RUNNERS_ENABLED: "true"        # required on n8n 1.x, harmless/ignored on 2.x+
+      N8N_RUNNERS_MODE: external
+      N8N_RUNNERS_BROKER_LISTEN_ADDRESS: 0.0.0.0
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+      N8N_NATIVE_PYTHON_RUNNER: "true"   # real Python 3 interpreter for the Code node's Python mode
+
+      # --- misc hardening --------------------------------------------------
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - backend
+      - proxy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5678/healthz/readiness"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  n8n-runners:
+    # NOTE: this image's version must stay in lockstep with the n8n image
+    # above. Both use the ":latest" tag here so Watchtower updates them
+    # together; if you pin n8n to a specific version, pin this to match.
+    image: n8nio/runners:latest
+    container_name: n8n_runners
+    restart: unless-stopped
+    depends_on:
+      - n8n
+    environment:
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+      N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: 15
+    volumes:
+      # Allow-lists which JS builtin/npm modules and Python stdlib/pip
+      # packages the Code node may import. See n8n-task-runners.json and
+      # the README section "Adding more Code node modules/packages".
+      - ./n8n-task-runners.json:/etc/n8n-task-runners.json:ro
+    networks:
+      - backend
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: nginx_proxy_manager
+    restart: unless-stopped
+    ports:
+      - "80:80"     # HTTP (ACME challenge + redirect to HTTPS)
+      - "443:443"   # HTTPS
+      - "81:81"     # NPM admin UI - see README for locking this down
+    volumes:
+      - npm_data:/data
+      - npm_letsencrypt:/etc/letsencrypt
+    networks:
+      - proxy
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  watchtower:
+    # containrrr/watchtower was archived; this is the actively maintained
+    # fork, kept up to date with modern Docker Engine API versions.
+    image: ghcr.io/nicholas-fedor/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"     # only touch containers labeled enable=true, above
+      WATCHTOWER_CLEANUP: "true"          # remove old images after a successful update
+      WATCHTOWER_ROLLING_RESTART: "true"  # update/restart one container at a time
+      WATCHTOWER_INCLUDE_RESTARTING: "true"
+      # 6-field cron: sec min hour day month weekday -> every Sunday 04:00
+      WATCHTOWER_SCHEDULE: "0 0 4 * * 0"
+      TZ: ${GENERIC_TIMEZONE}
+
+networks:
+  backend:
+    driver: bridge
+  proxy:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  n8n_data:
+  npm_data:
+  npm_letsencrypt:
