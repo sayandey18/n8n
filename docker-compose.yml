@@ -19,9 +19,6 @@ services:
     image: n8nio/n8n:latest
     container_name: n8n
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
       # --- database -----------------------------------------------------
       DB_TYPE: postgresdb
