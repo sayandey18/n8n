@@ -29,7 +29,7 @@ services:
       DB_POSTGRESDB_PASSWORD: ${DB_POSTGRESDB_PASSWORD}
       DB_POSTGRESDB_SSL_ENABLED: "true"
       DB_POSTGRESDB_SSL_CA: /certs/aiven-ca.pem
-      DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED: "true"
+      DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED: "false"
 
       # --- public URL / reverse proxy ------------------------------------
       N8N_HOST: ${N8N_HOST}
